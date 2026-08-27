@@ -1,0 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Inter:wght@300;400;500;600;700&family=Poor+Story&family=Quantico:wght@400;700&family=Oxanium:wght@400;600;700&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #06091a;
+  --color-surface: #0c1225;
+  --color-accent: #3b82f6;
+  --color-accent-bright: #60a5fa;
+  --color-border: rgba(255, 255, 255, 0.07);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #06091a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Hide scrollbar visually */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }

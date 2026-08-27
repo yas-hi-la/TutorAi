@@ -1,0 +1,10 @@
+{
+  "description": "Engaging landing page with dynamic letter animations introduces an AI teaching service, capturing user attention and enhancing brand impact.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
