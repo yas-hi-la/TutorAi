@@ -1,6 +1,64 @@
 import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 
+type Message = {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+type Chat = {
+  id: string
+  title: string
+  messages: Message[]
+  createdAt: number
+  updatedAt: number
+}
+
+const STORAGE_KEY = 'study_ai_chats'
+const ERROR_MESSAGE = 'Sorry, I could not get a response right now. Please try again.'
+
+function isChat(value: unknown): value is Chat {
+  if (!value || typeof value !== 'object') return false
+  const chat = value as Partial<Chat>
+  return typeof chat.id === 'string'
+    && typeof chat.title === 'string'
+    && typeof chat.createdAt === 'number'
+    && typeof chat.updatedAt === 'number'
+    && Array.isArray(chat.messages)
+    && chat.messages.every(message =>
+      Boolean(message)
+      && typeof message === 'object'
+      && (message as Message).role in { user: true, assistant: true }
+      && typeof (message as Message).content === 'string'
+    )
+}
+
+function loadChats(): Chat[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (!saved) return []
+    const parsed: unknown = JSON.parse(saved)
+    return Array.isArray(parsed) && parsed.every(isChat) ? parsed : []
+  } catch (error) {
+    console.error('Could not load saved chats:', error)
+    return []
+  }
+}
+
+function createChatId() {
+  return typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function createChatTitle(question: string) {
+  const title = question
+    .replace(/^(what is|what are|how does|how do|explain|tell me about)\s+/i, '')
+    .replace(/[?.!]+$/, '')
+    .trim()
+  return title.length > 52 ? `${title.slice(0, 49).trimEnd()}...` : title
+}
+
 // ============================================================
 // SECTION 1 — ANIMATION PAGE
 // Letters fly in, dot falls and zooms out to yellow, then
@@ -314,26 +372,31 @@ function LandingPage({
 
 
 function ChatPage({
-  question,
-  answer,
-  onNewQuestion,
+  chat,
+  chats,
+  loading,
+  onFollowUp,
+  onSelectChat,
   onHome,
 }: {
-  question: string
-  answer: string
-  onNewQuestion: (q: string) => void
+  chat: Chat
+  chats: Chat[]
+  loading: boolean
+  onFollowUp: (q: string) => void
+  onSelectChat: (id: string) => void
   onHome: () => void
 }) {
   const [followUp, setFollowUp] = useState('')
-  const [recentChats] = useState([question])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [folderHovered, setFolderHovered] = useState(false)
   const [folderClicked, setFolderClicked] = useState(false)
 
   const submit = () => {
     const q = followUp.trim()
-    if (q) { onNewQuestion(q); setFollowUp('') }
+    if (q && !loading) { onFollowUp(q); setFollowUp('') }
   }
+
+  const recentChats = [...chats].sort((a, b) => b.updatedAt - a.updatedAt)
 
   return (
     <div style={{
@@ -367,15 +430,17 @@ function ChatPage({
             color: '#999', textTransform: 'uppercase', margin: '0 0 0.75rem',
           }}>Recent chats</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {recentChats.map((c, i) => (
-              <div key={i} style={{
+            {recentChats.map(c => (
+              <div key={c.id}
+                onClick={() => { onSelectChat(c.id); setSidebarOpen(false) }}
+                style={{
                 padding: '0.5rem 0.75rem', borderRadius: 8,
-                background: i === recentChats.length - 1 ? 'rgba(229,215,11,0.15)' : 'transparent',
-                border: i === recentChats.length - 1 ? '1px solid rgba(229,215,11,0.3)' : '1px solid transparent',
+                background: c.id === chat.id ? 'rgba(229,215,11,0.15)' : 'transparent',
+                border: c.id === chat.id ? '1px solid rgba(229,215,11,0.3)' : '1px solid transparent',
                 fontSize: '0.82rem', color: '#333',
                 cursor: 'pointer', lineHeight: 1.4,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{c}</div>
+              }}>{c.title}</div>
             ))}
           </div>
         </div>
@@ -459,19 +524,6 @@ function ChatPage({
           </div>
         </div>
 
-        {/* Question bubble */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <div style={{
-            display: 'inline-block',
-            padding: '0.6rem 1.25rem',
-            background: 'rgb(229,215,11)',
-            borderRadius: 999,
-            fontFamily: 'Inter, sans-serif',
-            fontWeight: 600, fontSize: '0.95rem',
-            color: '#0a0a0a', maxWidth: '70%',
-          }}>{question}</div>
-        </div>
-
         {/* Explanation card */}
         <div style={{
           flex: 1,
@@ -481,13 +533,33 @@ function ChatPage({
           padding: '2rem',
           overflowY: 'auto',
         }}>
-          <div style={{
-  fontSize: '1rem',
-  lineHeight: 1.8,
-  color: '#1a1a1a',
-}}>
-  <ReactMarkdown>{answer}</ReactMarkdown>
-</div>
+          {chat.messages.map((message, index) => message.role === 'user' ? (
+            <div key={`${chat.id}-${index}`} style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
+              <div style={{
+                display: 'inline-block',
+                padding: '0.6rem 1.25rem',
+                background: 'rgb(229,215,11)',
+                borderRadius: 999,
+                fontFamily: 'Inter, sans-serif',
+                fontWeight: 600, fontSize: '0.95rem',
+                color: '#0a0a0a', maxWidth: '70%',
+              }}>{message.content}</div>
+            </div>
+          ) : (
+            <div key={`${chat.id}-${index}`} style={{
+              fontSize: '1rem',
+              lineHeight: 1.8,
+              color: '#1a1a1a',
+              marginBottom: '1.5rem',
+            }}>
+              <ReactMarkdown>{message.content}</ReactMarkdown>
+            </div>
+          ))}
+          {loading && (
+            <div style={{ fontSize: '1rem', lineHeight: 1.8, color: '#1a1a1a' }}>
+              <ReactMarkdown>Study AI is thinking...</ReactMarkdown>
+            </div>
+          )}
         </div>
 
         {/* Follow-up input */}
@@ -504,22 +576,29 @@ function ChatPage({
 export default function App() {
   const [visible, setVisible]           = useState<boolean[]>(LETTERS.map(() => false))
   const [dotPos, setDotPos]             = useState<{ x: number; y: number } | null>(null)
-  const [answer, setAnswer] = useState('')
+  const [chats, setChats] = useState<Chat[]>(loadChats)
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [dotFalling, setDotFalling]     = useState(false)
   const [dotExpanded, setDotExpanded]   = useState(false)
   const [showYellow, setShowYellow]     = useState(false)
   const [contractClip, setContractClip] = useState(false)
-  const [showPage, setShowPage]         = useState(false)
+  const [showPage, setShowPage         ] = useState(false)
   const [logoAt, setLogoAt]             = useState('64px 30px')
-
   const [currentPage, setCurrentPage]   = useState<'landing' | 'chat'>('landing')
-  const [question, setQuestion]         = useState('')
 
   const [tx, setTx] = useState<{ active: boolean; clip: string; transition: string }>({ active: false, clip: '', transition: 'none' })
 
   const iRef    = useRef<HTMLSpanElement>(null)
   const logoRef = useRef<HTMLSpanElement>(null)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(chats))
+    } catch (error) {
+      console.error('Could not save chats:', error)
+    }
+  }, [chats])
 
   useEffect(() => {
     const T: ReturnType<typeof setTimeout>[] = []
@@ -561,63 +640,68 @@ export default function App() {
   const clipExpanded   = 'circle(200vmax at 50% 50%)'
   const clipContracted = `circle(0px at ${logoAt})`
 
-  const handleFollowUp = async (q: string) => {
-  setQuestion(q)
-  setAnswer('')
-  setLoading(true)
-
-  try {
-    const response = await fetch('http://localhost:5050/api/ask', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        question: q,
-      }),
-    })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to get response')
+  const askGemini = async (q: string, chatId: string) => {
+    setLoading(true)
+    try {
+      const response = await fetch('http://localhost:5050/api/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ question: q }),
+      })
+      const data: unknown = await response.json()
+      if (!response.ok) {
+        throw new Error(
+          data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+            ? data.error
+            : 'Failed to get response'
+        )
+      }
+      const answer = data && typeof data === 'object' && 'answer' in data && typeof data.answer === 'string'
+        ? data.answer
+        : ''
+      if (!answer) throw new Error('Response did not include an answer')
+      setChats(prev => prev.map(chat => chat.id === chatId
+        ? { ...chat, messages: [...chat.messages, { role: 'assistant', content: answer }], updatedAt: Date.now() }
+        : chat
+      ))
+    } catch (error) {
+      console.error('Study AI Error:', error)
+      setChats(prev => prev.map(chat => chat.id === chatId
+        ? { ...chat, messages: [...chat.messages, { role: 'assistant', content: ERROR_MESSAGE }], updatedAt: Date.now() }
+        : chat
+      ))
+    } finally {
+      setLoading(false)
     }
-
-    setAnswer(data.answer)
-  } catch (error) {
-    console.error('Study AI Error:', error)
-    setAnswer('Sorry, I could not get a response right now. Please try again.')
-  } finally {
-    setLoading(false)
   }
-}
 
-const handleAsk = async (q: string) => {
-  setQuestion(q)
-  setAnswer('')
-
-  try {
-    const response = await fetch('http://localhost:5050/api/ask', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        question: q,
-      }),
-    })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to get AI response')
-    }
-
-    setAnswer(data.answer)
-  } catch (error) {
-    console.error('AI Error:', error)
-    setAnswer('Sorry, I could not generate an answer right now.')
+  const handleFollowUp = async (question: string) => {
+    const q = question.trim()
+    if (!q || !currentChatId || loading) return
+    const chatId = currentChatId
+    setChats(prev => prev.map(chat => chat.id === chatId
+      ? { ...chat, messages: [...chat.messages, { role: 'user', content: q }], updatedAt: Date.now() }
+      : chat
+    ))
+    await askGemini(q, chatId)
   }
+
+  const handleAsk = async (question: string) => {
+    const q = question.trim()
+    if (!q) return
+    const now = Date.now()
+    const chatId = createChatId()
+    setChats(prev => [...prev, {
+      id: chatId,
+      title: createChatTitle(q),
+      messages: [{ role: 'user', content: q }],
+      createdAt: now,
+      updatedAt: now,
+    }])
+    setCurrentChatId(chatId)
+    await askGemini(q, chatId)
 
   // ⬇️ KEEP YOUR EXISTING ANIMATION CODE BELOW THIS
 
@@ -670,6 +754,7 @@ const handleAsk = async (q: string) => {
   )
 }
 
+  const currentChat = chats.find(chat => chat.id === currentChatId)
 
   return (
     <>
@@ -683,14 +768,16 @@ const handleAsk = async (q: string) => {
         {currentPage === 'landing' && (
           <LandingPage logoRef={logoRef} onAsk={handleAsk} />
         )}
-        {currentPage === 'chat' && (
-  <ChatPage
-    question={question}
-    answer={loading ? 'Study AI is thinking...' : answer}
-    onNewQuestion={handleFollowUp}
-    onHome={() => setCurrentPage('landing')}
-  />
-)}
+        {currentPage === 'chat' && currentChat && (
+          <ChatPage
+            chat={currentChat}
+            chats={chats}
+            loading={loading}
+            onFollowUp={handleFollowUp}
+            onSelectChat={setCurrentChatId}
+            onHome={() => setCurrentPage('landing')}
+          />
+        )}
       </div>
 
       {/* Page transition overlay — yellow circle zooms out then zooms in */}
