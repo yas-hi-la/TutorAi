@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import ReactMarkdown from 'react-markdown'
 
 // ============================================================
 // SECTION 1 — ANIMATION PAGE
@@ -311,20 +312,15 @@ function LandingPage({
 // AI explanation card, and follow-up input.
 // ============================================================
 
-const MOCK_EXPLANATION = `Great question! Let's break this down step by step.
-
-This is a fundamental concept that builds on a few key ideas. First, we need to understand the core principle at work here. Once that clicks, everything else follows naturally.
-
-Think of it like this: imagine you're building something from the ground up. Each layer depends on the one beneath it. The same logic applies here — master the foundation and the rest becomes intuitive.
-
-We'll explore this together, and I'll check in as we go to make sure it's landing. Ready to dive deeper?`
 
 function ChatPage({
   question,
+  answer,
   onNewQuestion,
   onHome,
 }: {
   question: string
+  answer: string
   onNewQuestion: (q: string) => void
   onHome: () => void
 }) {
@@ -485,17 +481,13 @@ function ChatPage({
           padding: '2rem',
           overflowY: 'auto',
         }}>
-          <p style={{
-            fontFamily: '"Oxanium", sans-serif',
-            fontSize: '0.78rem', fontWeight: 700,
-            letterSpacing: '0.1em', textTransform: 'uppercase',
-            color: '#999', margin: '0 0 1rem',
-          }}>Explanation</p>
-          <p style={{
-            fontSize: '1rem', lineHeight: 1.8,
-            color: '#1a1a1a', margin: 0,
-            whiteSpace: 'pre-line',
-          }}>{MOCK_EXPLANATION}</p>
+          <div style={{
+  fontSize: '1rem',
+  lineHeight: 1.8,
+  color: '#1a1a1a',
+}}>
+  <ReactMarkdown>{answer}</ReactMarkdown>
+</div>
         </div>
 
         {/* Follow-up input */}
@@ -512,6 +504,8 @@ function ChatPage({
 export default function App() {
   const [visible, setVisible]           = useState<boolean[]>(LETTERS.map(() => false))
   const [dotPos, setDotPos]             = useState<{ x: number; y: number } | null>(null)
+  const [answer, setAnswer] = useState('')
+  const [loading, setLoading] = useState(false)
   const [dotFalling, setDotFalling]     = useState(false)
   const [dotExpanded, setDotExpanded]   = useState(false)
   const [showYellow, setShowYellow]     = useState(false)
@@ -521,6 +515,7 @@ export default function App() {
 
   const [currentPage, setCurrentPage]   = useState<'landing' | 'chat'>('landing')
   const [question, setQuestion]         = useState('')
+
   const [tx, setTx] = useState<{ active: boolean; clip: string; transition: string }>({ active: false, clip: '', transition: 'none' })
 
   const iRef    = useRef<HTMLSpanElement>(null)
@@ -566,27 +561,115 @@ export default function App() {
   const clipExpanded   = 'circle(200vmax at 50% 50%)'
   const clipContracted = `circle(0px at ${logoAt})`
 
-  const handleFollowUp = (q: string) => {
-    setQuestion(q)
+  const handleFollowUp = async (q: string) => {
+  setQuestion(q)
+  setAnswer('')
+  setLoading(true)
+
+  try {
+    const response = await fetch('http://localhost:5050/api/ask', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        question: q,
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to get response')
+    }
+
+    setAnswer(data.answer)
+  } catch (error) {
+    console.error('Study AI Error:', error)
+    setAnswer('Sorry, I could not get a response right now. Please try again.')
+  } finally {
+    setLoading(false)
+  }
+}
+
+const handleAsk = async (q: string) => {
+  setQuestion(q)
+  setAnswer('')
+
+  try {
+    const response = await fetch('http://localhost:5050/api/ask', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        question: q,
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to get AI response')
+    }
+
+    setAnswer(data.answer)
+  } catch (error) {
+    console.error('AI Error:', error)
+    setAnswer('Sorry, I could not generate an answer right now.')
   }
 
-  const handleAsk = (q: string) => {
-    setQuestion(q)
-    const btn = document.querySelector<HTMLElement>('[data-send-btn]')
-    const sendOrigin = btn
-      ? (() => { const r = btn.getBoundingClientRect(); return `${Math.round(r.left + r.width / 2)}px ${Math.round(r.top + r.height / 2)}px` })()
-      : '50% 62%'
-    const questionOrigin = `${Math.round(window.innerWidth * 0.78)}px ${Math.round(window.innerHeight * 0.16)}px`
+  // ⬇️ KEEP YOUR EXISTING ANIMATION CODE BELOW THIS
 
-    setTx({ active: true, clip: `circle(0px at ${sendOrigin})`, transition: 'none' })
-    setTimeout(() => setTx({ active: true, clip: `circle(200vmax at ${sendOrigin})`, transition: 'clip-path 0.55s cubic-bezier(0.4,0,0.2,1)' }), 30)
-    setTimeout(() => {
-      setCurrentPage('chat')
-      setTx({ active: true, clip: `circle(200vmax at ${questionOrigin})`, transition: 'none' })
-    }, 640)
-    setTimeout(() => setTx({ active: true, clip: `circle(0px at ${questionOrigin})`, transition: 'clip-path 0.65s cubic-bezier(0.4,0,0.2,1)' }), 680)
-    setTimeout(() => setTx({ active: false, clip: '', transition: 'none' }), 1400)
-  }
+  const btn = document.querySelector<HTMLElement>('[data-send-btn]')
+  const sendOrigin = btn
+    ? (() => {
+        const r = btn.getBoundingClientRect()
+        return `${Math.round(r.left + r.width / 2)}px ${Math.round(r.top + r.height / 2)}px`
+      })()
+    : '50% 62%'
+
+  const questionOrigin = `${Math.round(window.innerWidth * 0.78)}px ${Math.round(window.innerHeight * 0.16)}px`
+
+  setTx({
+    active: true,
+    clip: `circle(0px at ${sendOrigin})`,
+    transition: 'none',
+  })
+
+  setTimeout(() =>
+    setTx({
+      active: true,
+      clip: `circle(200vmax at ${sendOrigin})`,
+      transition: 'clip-path 0.55s cubic-bezier(0.4,0,0.2,1)',
+    }),
+    30
+  )
+
+  setTimeout(() => {
+    setCurrentPage('chat')
+    setTx({
+      active: true,
+      clip: `circle(200vmax at ${questionOrigin})`,
+      transition: 'none',
+    })
+  }, 640)
+
+  setTimeout(() =>
+    setTx({
+      active: true,
+      clip: `circle(0px at ${questionOrigin})`,
+      transition: 'clip-path 0.65s cubic-bezier(0.4,0,0.2,1)',
+    }),
+    680
+  )
+
+  setTimeout(
+    () => setTx({ active: false, clip: '', transition: 'none' }),
+    1400
+  )
+}
+
 
   return (
     <>
@@ -601,8 +684,13 @@ export default function App() {
           <LandingPage logoRef={logoRef} onAsk={handleAsk} />
         )}
         {currentPage === 'chat' && (
-          <ChatPage question={question} onNewQuestion={handleFollowUp} onHome={() => setCurrentPage('landing')} />
-        )}
+  <ChatPage
+    question={question}
+    answer={loading ? 'Study AI is thinking...' : answer}
+    onNewQuestion={handleFollowUp}
+    onHome={() => setCurrentPage('landing')}
+  />
+)}
       </div>
 
       {/* Page transition overlay — yellow circle zooms out then zooms in */}
