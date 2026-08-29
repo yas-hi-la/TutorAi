@@ -232,11 +232,31 @@ function InputBar({
             e.target.style.height = e.target.scrollHeight + 'px'
           }}
           onKeyDown={e => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-              e.preventDefault()
-              onSubmit()
-            }
-          }}
+  if (e.key === 'Enter') {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+
+      const textarea = e.currentTarget
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+
+      const newValue =
+        value.substring(0, start) + '\n' + value.substring(end)
+
+      onChange(newValue)
+
+      requestAnimationFrame(() => {
+        textarea.selectionStart = start + 1
+        textarea.selectionEnd = start + 1
+      })
+
+      return
+    }
+
+    e.preventDefault()
+    onSubmit()
+  }
+}}
           style={{
             flex: 1, border: 'none', outline: 'none',
             background: 'transparent',
@@ -543,6 +563,8 @@ function ChatPage({
                 fontFamily: 'Inter, sans-serif',
                 fontWeight: 600, fontSize: '0.95rem',
                 color: '#0a0a0a', maxWidth: '70%',
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'break-word',
               }}>{message.content}</div>
             </div>
           ) : (
