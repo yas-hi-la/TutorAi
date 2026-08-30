@@ -18,14 +18,14 @@ const ai = new GoogleGenAI({
 // Test route
 app.get("/", (req, res) => {
   res.json({
-    message: "Study AI backend is running!"
+    message: "TutorAi backend is running!"
   });
 });
 
-// AI Teacher - Streaming Response
+// AI Teacher
 app.post("/api/ask", async (req, res) => {
   try {
-    const { question } = req.body;
+    const { question, history } = req.body;
 
     if (!question) {
       return res.status(400).json({
@@ -33,26 +33,44 @@ app.post("/api/ask", async (req, res) => {
       });
     }
 
-    const prompt = `
-You are Study AI, an intelligent AI teacher.
+    // Defensive: only accept well-formed history entries
+    const validHistory = Array.isArray(history)
+      ? history.filter(
+          (m) =>
+            m &&
+            (m.role === "user" || m.role === "assistant") &&
+            typeof m.content === "string"
+        )
+      : [];
 
-Your goal is to TEACH the student, not simply give them an answer.
+    const systemInstruction = `
+You are TutorAi, a patient, knowledgeable tutor having an ongoing conversation with a student.
 
-Follow these rules:
-1. Explain the concept in simple language.
-2. Break difficult concepts into smaller steps.
-3. Give a simple example when useful.
-4. Avoid unnecessarily complicated terminology.
-5. Use Markdown for headings, bullet points, and bold important terms.
-6. At the end, ask the student one short question to check their understanding.
+Rules:
+- Stay on the SAME topic as the ongoing conversation unless the student clearly changes the subject. Short follow-ups like "give me an example", "why?", "explain that", "make it simpler", "show me the code", or "what if X happens?" ALWAYS refer to what was just discussed. Never invent an unrelated topic.
+- Do not introduce yourself ("Hello! I'm TutorAi", "Welcome to TutorAi") — respond as if mid-conversation, unless this is genuinely the first message of a brand new topic.
+- Do not restate or re-summarize the whole lesson so far on every turn. Build on what was already said.
+- Be concise and conversational. Simple follow-ups deserve a few sentences to a short paragraph, not a long essay. Go longer only when the concept genuinely needs more depth.
+- Use Markdown, but don't force headings/bold on simple answers — save that structure for genuinely complex explanations.
+- Only end with a check-in question ("Does that make sense?", "Want me to walk through X?") when it's pedagogically useful, such as right after introducing a brand-new concept. Do NOT append one to every response. If the student asked something narrow (e.g. "what's the syntax?"), just answer it.
+- Avoid generic chatbot enthusiasm ("Great question! 🎉", "Let's dive in!") unless it's genuinely natural.
+- Use simple language, analogies, and short code examples where they help.
+`.trim();
 
-Student's question:
-${question}
-`;
+    const contents = [
+      ...validHistory.map((message) => ({
+        role: message.role === "assistant" ? "model" : "user",
+        parts: [{ text: message.content }],
+      })),
+      { role: "user", parts: [{ text: question }] },
+    ];
 
     const response = await ai.models.generateContent({
       model: "gemini-3.6-flash",
-      contents: prompt
+      contents,
+      config: {
+        systemInstruction,
+      },
     });
 
     res.json({
@@ -69,5 +87,5 @@ ${question}
 });
 
 app.listen(PORT, () => {
-  console.log(`Study AI server running on http://localhost:${PORT}`);
+  console.log(`TutorAi server running on http://localhost:${PORT}`);
 });

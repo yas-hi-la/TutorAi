@@ -579,7 +579,7 @@ function ChatPage({
           ))}
           {loading && (
             <div style={{ fontSize: '1rem', lineHeight: 1.8, color: '#1a1a1a' }}>
-              <ReactMarkdown>Study AI is thinking...</ReactMarkdown>
+              <ReactMarkdown>TutorAi is thinking...</ReactMarkdown>
             </div>
           )}
         </div>
@@ -662,7 +662,7 @@ export default function App() {
   const clipExpanded   = 'circle(200vmax at 50% 50%)'
   const clipContracted = `circle(0px at ${logoAt})`
 
-  const askGemini = async (q: string, chatId: string) => {
+  const askGemini = async (q: string, chatId: string, history: Message[] = []) => {
     setLoading(true)
     try {
       const response = await fetch('http://localhost:5050/api/ask', {
@@ -670,7 +670,7 @@ export default function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({ question: q, history }),
       })
       const data: unknown = await response.json()
       if (!response.ok) {
@@ -689,7 +689,7 @@ export default function App() {
         : chat
       ))
     } catch (error) {
-      console.error('Study AI Error:', error)
+      console.error('TutorAi Error:', error)
       setChats(prev => prev.map(chat => chat.id === chatId
         ? { ...chat, messages: [...chat.messages, { role: 'assistant', content: ERROR_MESSAGE }], updatedAt: Date.now() }
         : chat
@@ -703,11 +703,15 @@ export default function App() {
     const q = question.trim()
     if (!q || !currentChatId || loading) return
     const chatId = currentChatId
+
+    const existingChat = chats.find(chat => chat.id === chatId)
+    const history = existingChat ? existingChat.messages : []
+
     setChats(prev => prev.map(chat => chat.id === chatId
       ? { ...chat, messages: [...chat.messages, { role: 'user', content: q }], updatedAt: Date.now() }
       : chat
     ))
-    await askGemini(q, chatId)
+    await askGemini(q, chatId, history)
   }
 
   const handleAsk = async (question: string) => {
