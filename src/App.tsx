@@ -72,7 +72,7 @@ interface LetterDef {
 }
 
 const LETTERS: LetterDef[] = [
-  { char: 't', from: 'top',    delay: 0 },
+  { char: 'T', from: 'top',    delay: 0 },
   { char: 'u', from: 'bottom', delay: 320 },
   { char: 't', from: 'top',    delay: 640 },
   { char: 'o', from: 'top',    delay: 960 },
@@ -317,7 +317,7 @@ function InputBar({
 
 const Logo = ({ refProp }: { refProp?: React.RefObject<HTMLSpanElement | null> }) => (
   <span ref={refProp} style={{ fontSize: '36px', fontWeight: 500, letterSpacing: '2px' }}>
-    <span style={{ fontFamily: '"Quantico", sans-serif', color: '#0a0a0a', letterSpacing: '0.5px' }}>tutor</span>
+    <span style={{ fontFamily: '"Quantico", sans-serif', color: '#0a0a0a', letterSpacing: '0.5px' }}>Tutor</span>
     <span style={{ fontFamily: '"JetBrains Mono", monospace', color: 'rgb(229,215,11)', letterSpacing: '1px' }}>Ai</span>
   </span>
 )
