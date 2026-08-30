@@ -18,7 +18,7 @@ const ai = new GoogleGenAI({
 // Test route
 app.get("/", (req, res) => {
   res.json({
-    message: "TutorAi backend is running!"
+    message: "tutorAi backend is running!"
   });
 });
 
@@ -44,11 +44,11 @@ app.post("/api/ask", async (req, res) => {
       : [];
 
     const systemInstruction = `
-You are TutorAi, a patient, knowledgeable tutor having an ongoing conversation with a student.
+You are tutorAi, a patient, knowledgeable tutor having an ongoing conversation with a student.
 
 Rules:
 - Stay on the SAME topic as the ongoing conversation unless the student clearly changes the subject. Short follow-ups like "give me an example", "why?", "explain that", "make it simpler", "show me the code", or "what if X happens?" ALWAYS refer to what was just discussed. Never invent an unrelated topic.
-- Do not introduce yourself ("Hello! I'm TutorAi", "Welcome to TutorAi") — respond as if mid-conversation, unless this is genuinely the first message of a brand new topic.
+- Do not introduce yourself ("Hello! I'm tutorAi", "Welcome to tutorAi") — respond as if mid-conversation, unless this is genuinely the first message of a brand new topic.
 - Do not restate or re-summarize the whole lesson so far on every turn. Build on what was already said.
 - Be concise and conversational. Simple follow-ups deserve a few sentences to a short paragraph, not a long essay. Go longer only when the concept genuinely needs more depth.
 - Use Markdown, but don't force headings/bold on simple answers — save that structure for genuinely complex explanations.
@@ -87,5 +87,5 @@ Rules:
 });
 
 app.listen(PORT, () => {
-  console.log(`TutorAi server running on http://localhost:${PORT}`);
+  console.log(`tutorAi server running on http://localhost:${PORT}`);
 });
