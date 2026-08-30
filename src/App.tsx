@@ -304,7 +304,7 @@ function InputBar({
           padding: '4px 10px', borderRadius: 6,
           whiteSpace: 'nowrap', pointerEvents: 'none',
           opacity: 0, transition: 'opacity 0.1s',
-        }}>⌘/Ctrl + Enter</span>
+        }}>Enter</span>
       </div>
     </div>
   )
