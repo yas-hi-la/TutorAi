@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 
 type Message = {
   role: 'user' | 'assistant'
@@ -398,6 +402,8 @@ function ChatPage({
   onFollowUp,
   onSelectChat,
   onHome,
+  onRenameChat,
+  onDeleteChat,
 }: {
   chat: Chat
   chats: Chat[]
@@ -405,11 +411,27 @@ function ChatPage({
   onFollowUp: (q: string) => void
   onSelectChat: (id: string) => void
   onHome: () => void
+  onRenameChat: (id: string, title: string) => void
+  onDeleteChat: (id: string) => void
 }) {
   const [followUp, setFollowUp] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [folderHovered, setFolderHovered] = useState(false)
   const [folderClicked, setFolderClicked] = useState(false)
+  const [hoveredChatId, setHoveredChatId] = useState<string | null>(null)
+  const [mobileActionsChatId, setMobileActionsChatId] = useState<string | null>(null)
+  const [editingChatId, setEditingChatId] = useState<string | null>(null)
+  const [draftTitle, setDraftTitle] = useState('')
+  const [isMobile, setIsMobile] = useState(false)
+
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const updateIsMobile = () => setIsMobile(window.innerWidth <= 768)
+    updateIsMobile()
+    window.addEventListener('resize', updateIsMobile)
+    return () => window.removeEventListener('resize', updateIsMobile)
+  }, [])
 
   const submit = () => {
     const q = followUp.trim()
@@ -418,13 +440,37 @@ function ChatPage({
 
   const recentChats = [...chats].sort((a, b) => b.updatedAt - a.updatedAt)
 
+  const handleRenameSave = (id: string) => {
+    const trimmed = draftTitle.trim()
+    if (!trimmed) {
+      setEditingChatId(null)
+      setDraftTitle('')
+      return
+    }
+
+    onRenameChat(id, trimmed)
+    setEditingChatId(null)
+    setDraftTitle('')
+  }
+
+  const handleDelete = (id: string) => {
+    onDeleteChat(id)
+    setSidebarOpen(false)
+    setHoveredChatId(null)
+    setMobileActionsChatId(null)
+    setEditingChatId(null)
+    setDraftTitle('')
+  }
+
   return (
     <div style={{
-      display: 'flex', minHeight: '100vh',
-      background: '#FFFDF5', fontFamily: 'Inter, sans-serif', color: '#0a0a0a',
+      display: 'flex',
+      minHeight: '100vh',
+      background: '#f7f3ef',
+      fontFamily: 'Inter, sans-serif',
+      color: '#0a0a0a',
       position: 'relative',
     }}>
-      {/* Sidebar drawer */}
       <aside style={{
         position: 'fixed', top: 0, left: 0, bottom: 0,
         width: 240,
@@ -444,29 +490,202 @@ function ChatPage({
           <Logo />
         </span>
 
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           <p style={{
             fontSize: '0.7rem', fontWeight: 600, letterSpacing: '0.08em',
             color: '#999', textTransform: 'uppercase', margin: '0 0 0.75rem',
           }}>Recent chats</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {recentChats.map(c => (
-              <div key={c.id}
-                onClick={() => { onSelectChat(c.id); setSidebarOpen(false) }}
-                style={{
-                padding: '0.5rem 0.75rem', borderRadius: 8,
-                background: c.id === chat.id ? 'rgba(229,215,11,0.15)' : 'transparent',
-                border: c.id === chat.id ? '1px solid rgba(229,215,11,0.3)' : '1px solid transparent',
-                fontSize: '0.82rem', color: '#333',
-                cursor: 'pointer', lineHeight: 1.4,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{c.title}</div>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            {recentChats.map(c => {
+              const showActions = (!isMobile && hoveredChatId === c.id) || (isMobile && mobileActionsChatId === c.id)
+              const isEditing = editingChatId === c.id
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => {
+                    if (isMobile) {
+                      if (mobileActionsChatId === c.id) {
+                        onSelectChat(c.id)
+                        setSidebarOpen(false)
+                        setMobileActionsChatId(null)
+                        return
+                      }
+                      setMobileActionsChatId(c.id)
+                      setHoveredChatId(null)
+                      return
+                    }
+                    onSelectChat(c.id)
+                    setSidebarOpen(false)
+                    setMobileActionsChatId(null)
+                  }}
+                  onMouseEnter={() => !isMobile && setHoveredChatId(c.id)}
+                  onMouseLeave={() => !isMobile && setHoveredChatId(null)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    gap: '0.5rem',
+                    padding: '0.5rem 0.75rem', borderRadius: 8,
+                    background: c.id === chat.id ? 'rgba(229,215,11,0.15)' : 'transparent',
+                    border: c.id === chat.id ? '1px solid rgba(229,215,11,0.3)' : '1px solid transparent',
+                    fontSize: '0.82rem', color: '#333',
+                    cursor: 'pointer', lineHeight: 1.4,
+                    minHeight: 42,
+                  }}
+                >
+                  {isEditing ? (
+                    <input
+                      autoFocus
+                      value={draftTitle}
+                      onChange={e => setDraftTitle(e.target.value)}
+                      onClick={e => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                      }}
+                      onMouseDown={e => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleRenameSave(c.id)
+                        }
+                        if (e.key === 'Escape') {
+                          e.preventDefault()
+                          setEditingChatId(null)
+                          setDraftTitle('')
+                        }
+                      }}
+                      onBlur={() => {
+                        const trimmed = draftTitle.trim()
+                        if (!trimmed) {
+                          setEditingChatId(null)
+                          setDraftTitle('')
+                          return
+                        }
+                        onRenameChat(c.id, trimmed)
+                        setEditingChatId(null)
+                        setDraftTitle('')
+                      }}
+                      style={{
+                        width: '100%',
+                        border: '1px solid rgba(0,0,0,0.18)',
+                        borderRadius: 6,
+                        background: '#fff',
+                        padding: '0.35rem 0.5rem',
+                        fontSize: '0.8rem',
+                        color: '#0a0a0a',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  ) : (
+                    <span style={{
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>{c.title}</span>
+                  )}
+
+                  {showActions && !isEditing && (
+                    <div
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        flexShrink: 0,
+                        marginLeft: '0.25rem',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        aria-label="Rename chat"
+                        onClick={e => {
+                          e.stopPropagation()
+                          setEditingChatId(c.id)
+                          setDraftTitle(c.title)
+                          setMobileActionsChatId(null)
+                        }}
+                        style={{
+                          border: '1px solid rgba(0,0,0,0.12)',
+                          background: '#fff',
+                          color: '#0a0a0a',
+                          borderRadius: 6,
+                          padding: '0.25rem 0.5rem',
+                          fontSize: '0.7rem',
+                          cursor: 'pointer',
+                          minWidth: 42,
+                          minHeight: 28,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          style={{ width: 16, height: 16 }}
+                          aria-hidden="true"
+                        >
+                          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
+                          <path d="M14.06 6.19l3.75 3.75" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Delete chat"
+                        onClick={e => {
+                          e.stopPropagation()
+                          e.preventDefault()
+                          handleDelete(c.id)
+                        }}
+                        style={{
+                          border: '1px solid rgba(0,0,0,0.12)',
+                          background: '#fff',
+                          color: '#0a0a0a',
+                          borderRadius: 6,
+                          padding: '0.25rem 0.5rem',
+                          fontSize: '0.7rem',
+                          cursor: 'pointer',
+                          minWidth: 46,
+                          minHeight: 28,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          style={{ width: 16, height: 16 }}
+                          aria-hidden="true"
+                        >
+                          <path d="M3 6h18" />
+                          <path d="M8 6V4h8v2" />
+                          <path d="M6 6l1 14h10l1-14" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       </aside>
 
-      {/* Backdrop */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
@@ -477,31 +696,49 @@ function ChatPage({
         />
       )}
 
-      {/* Right main panel */}
       <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column',
-        padding: '2rem', gap: '1.5rem', minWidth: 0,
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        height: '100vh',
       }}>
-        {/* Top bar: hamburger + folder */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button
-            onClick={() => setSidebarOpen(true)}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: 4, display: 'flex', flexDirection: 'column',
-              gap: 5, color: '#333',
-            }}
-            aria-label="Open menu"
-          >
-            {[0,1,2].map(i => (
-              <span key={i} style={{
-                display: 'block', width: 22, height: 2,
-                background: '#333', borderRadius: 2,
-              }} />
-            ))}
-          </button>
+        <header style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'rgba(247,243,239,0.92)',
+          backdropFilter: 'blur(10px)',
+          borderBottom: '1px solid rgba(0,0,0,0.06)',
+          padding: '0.9rem 1.1rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+            <button
+              onClick={() => setSidebarOpen(true)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: 4, display: 'flex', flexDirection: 'column',
+                justifyContent: 'center', gap: 5, color: '#333',
+                width: 32, height: 32,
+              }}
+              aria-label="Open menu"
+            >
+              {[0,1,2].map(i => (
+                <span key={i} style={{
+                  display: 'block', width: 20, height: 2,
+                  background: '#333', borderRadius: 2,
+                }} />
+              ))}
+            </button>
 
-          {/* Folder icon — closed → open on hover → "Add to a Subject" on click */}
+            <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <Logo />
+            </div>
+          </div>
+
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flexDirection: 'row-reverse', gap: '0.5rem' }}>
             <button
               onMouseEnter={() => setFolderHovered(true)}
@@ -511,13 +748,11 @@ function ChatPage({
               aria-label="Add to a subject"
             >
               {folderHovered || folderClicked ? (
-                /* Open folder */
                 <svg width="26" height="22" viewBox="0 0 26 22" fill="none" stroke="#0a0a0a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M1 4.5C1 3.4 1.9 2.5 3 2.5H9l2 2.5h11c1.1 0 2 .9 2 2v1H3.5" />
                   <path d="M1 8h22l-2.5 11H3.5L1 8z" />
                 </svg>
               ) : (
-                /* Closed folder */
                 <svg width="26" height="22" viewBox="0 0 26 22" fill="none" stroke="#0a0a0a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M1 5C1 3.9 1.9 3 3 3H9l2 2.5h11c1.1 0 2 .9 2 2v9.5c0 1.1-.9 2-2 2H3c-1.1 0-2-.9-2-2V5z" />
                 </svg>
@@ -542,50 +777,164 @@ function ChatPage({
               </div>
             )}
           </div>
-        </div>
+        </header>
 
-        {/* Explanation card */}
-        <div style={{
+        <main style={{
           flex: 1,
-          background: '#fff',
-          border: '1px solid rgba(0,0,0,0.08)',
-          borderRadius: 18,
-          padding: '2rem',
-          overflowY: 'auto',
+          minHeight: 0,
+          overflow: 'hidden',
         }}>
-          {chat.messages.map((message, index) => message.role === 'user' ? (
-            <div key={`${chat.id}-${index}`} style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
-              <div style={{
-                display: 'inline-block',
-                padding: '0.6rem 1.25rem',
-                background: 'rgb(229,215,11)',
-                borderRadius: 999,
-                fontFamily: 'Inter, sans-serif',
-                fontWeight: 600, fontSize: '0.95rem',
-                color: '#0a0a0a', maxWidth: '70%',
-                whiteSpace: 'pre-wrap',
-                overflowWrap: 'break-word',
-              }}>{message.content}</div>
-            </div>
-          ) : (
-            <div key={`${chat.id}-${index}`} style={{
-              fontSize: '1rem',
-              lineHeight: 1.8,
-              color: '#1a1a1a',
-              marginBottom: '1.5rem',
+          <div
+            ref={messagesContainerRef}
+            style={{
+              height: '100%',
+              overflowY: 'auto',
+              padding: '1.25rem clamp(1rem, 2.2vw, 2rem) 0.75rem',
+            }}
+          >
+            <div style={{
+              width: '100%',
+              maxWidth: 980,
+              margin: '0 auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.25rem',
             }}>
-              <ReactMarkdown>{message.content}</ReactMarkdown>
-            </div>
-          ))}
-          {loading && (
-            <div style={{ fontSize: '1rem', lineHeight: 1.8, color: '#1a1a1a' }}>
-              <ReactMarkdown>tutorAi is thinking...</ReactMarkdown>
-            </div>
-          )}
-        </div>
+              {chat.messages.map((message, index) => {
+                const isUser = message.role === 'user'
+                const bubbleRadius = isUser ? 32 : 36
 
-        {/* Follow-up input */}
-        <InputBar value={followUp} onChange={setFollowUp} onSubmit={submit} placeholder="Follow up..." fullWidth />
+                return (
+                  <div
+                    key={`${chat.id}-${index}`}
+                    style={{
+                      display: 'flex',
+                      justifyContent: isUser ? 'flex-end' : 'flex-start',
+                    }}
+                  >
+                    <div
+                      style={{
+                        maxWidth: isUser ? '68%' : '72%',
+                        width: 'fit-content',
+                      }}
+                    >
+                      {isUser ? (
+                        <div style={{
+                          display: 'inline-block',
+                          padding: '0.82rem 1.2rem',
+                          background: 'rgba(229,215,11,0.28)',
+                          border: '1px solid rgba(229,215,11,0.7)',
+                          borderRadius: bubbleRadius,
+                          fontFamily: 'Inter, sans-serif',
+                          fontWeight: 500,
+                          fontSize: '0.96rem',
+                          lineHeight: 1.6,
+                          color: '#0a0a0a',
+                          whiteSpace: 'pre-wrap',
+                          overflowWrap: 'anywhere',
+                          wordBreak: 'break-word',
+                        }}>
+                          {message.content}
+                        </div>
+                      ) : (
+                        <div style={{
+                          display: 'inline-block',
+                          padding: '0.95rem 1.2rem',
+                          background: '#f5f2ee',
+                          border: '1px solid rgba(0,0,0,0.08)',
+                          borderRadius: bubbleRadius,
+                          fontSize: '1rem',
+                          lineHeight: 1.75,
+                          color: '#1a1a1a',
+                          maxWidth: '100%',
+                          overflowWrap: 'anywhere',
+                          wordBreak: 'break-word',
+                        }}>
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm, remarkMath]}
+                            rehypePlugins={[rehypeKatex]}
+                            components={{
+                              p: ({ children }) => (
+                                <p style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{children}</p>
+                              ),
+                              ul: ({ children }) => (
+                                <ul style={{ margin: '0.65rem 0 0', paddingLeft: '1.2rem' }}>{children}</ul>
+                              ),
+                              ol: ({ children }) => (
+                                <ol style={{ margin: '0.65rem 0 0', paddingLeft: '1.2rem' }}>{children}</ol>
+                              ),
+                              li: ({ children }) => (
+                                <li style={{ marginBottom: '0.25rem' }}>{children}</li>
+                              ),
+                              code: ({ children }) => (
+                                <code style={{
+                                  fontFamily: '"JetBrains Mono", monospace',
+                                  background: 'rgba(0,0,0,0.06)',
+                                  borderRadius: 6,
+                                  padding: '0.1rem 0.3rem',
+                                }}>{children}</code>
+                              ),
+                              pre: ({ children }) => (
+                                <pre style={{
+                                  margin: '0.75rem 0',
+                                  overflowX: 'auto',
+                                  background: 'rgba(0,0,0,0.04)',
+                                  borderRadius: 12,
+                                  padding: '0.8rem',
+                                }}>{children}</pre>
+                              ),
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+
+              {loading && (
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  <div style={{
+                    maxWidth: '72%',
+                    display: 'inline-block',
+                    padding: '0.95rem 1.2rem',
+                    background: '#f5f2ee',
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    borderRadius: 36,
+                    color: '#1a1a1a',
+                    fontSize: '1rem',
+                    lineHeight: 1.75,
+                  }}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm, remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                      components={{
+                        p: ({ children }) => (
+                          <p style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{children}</p>
+                        ),
+                      }}
+                    >
+                      tutorAi is thinking...
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </main>
+
+        <div style={{
+          padding: '0.75rem 1rem calc(0.9rem + env(safe-area-inset-bottom, 0px))',
+          borderTop: '1px solid rgba(0,0,0,0.06)',
+          background: 'rgba(247,243,239,0.94)',
+          backdropFilter: 'blur(10px)',
+        }}>
+          <div style={{ width: '100%', maxWidth: 980, margin: '0 auto' }}>
+            <InputBar value={followUp} onChange={setFollowUp} onSubmit={submit} placeholder="Follow up..." fullWidth />
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -780,6 +1129,33 @@ export default function App() {
   )
 }
 
+  const handleRenameChat = (id: string, title: string) => {
+    const trimmedTitle = title.trim()
+    if (!trimmedTitle) return
+
+    setChats(prev => prev.map(chat => chat.id === id
+      ? { ...chat, title: trimmedTitle, updatedAt: Date.now() }
+      : chat
+    ))
+  }
+
+  const handleDeleteChat = (id: string) => {
+    const remainingChats = chats.filter(chat => chat.id !== id)
+
+    if (currentChatId === id) {
+      const nextRecentChat = [...remainingChats].sort((a, b) => b.updatedAt - a.updatedAt)[0]
+
+      if (nextRecentChat) {
+        setCurrentChatId(nextRecentChat.id)
+      } else {
+        setCurrentChatId(null)
+        setCurrentPage('landing')
+      }
+    }
+
+    setChats(remainingChats)
+  }
+
   const currentChat = chats.find(chat => chat.id === currentChatId)
 
   return (
@@ -802,6 +1178,8 @@ export default function App() {
             onFollowUp={handleFollowUp}
             onSelectChat={setCurrentChatId}
             onHome={() => setCurrentPage('landing')}
+            onRenameChat={handleRenameChat}
+            onDeleteChat={handleDeleteChat}
           />
         )}
       </div>
