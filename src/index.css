@@ -41,6 +41,23 @@ button, textarea {
   padding: 0 !important;
 }
 
+.tutorai-primary-button {
+  appearance: none;
+  background: rgb(229, 215, 11);
+  border: 1px solid rgb(229, 215, 11);
+  border-radius: 14px;
+  color: #0a0a0a;
+  font-family: 'Oxanium', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.tutorai-primary-button:hover {
+  background: rgb(210, 197, 5);
+  border-color: rgb(210, 197, 5);
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

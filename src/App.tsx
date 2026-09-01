@@ -423,6 +423,7 @@ function ChatPage({
   const [editingChatId, setEditingChatId] = useState<string | null>(null)
   const [draftTitle, setDraftTitle] = useState('')
   const [isMobile, setIsMobile] = useState(false)
+  const [pendingDeleteChatId, setPendingDeleteChatId] = useState<string | null>(null)
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null)
 
@@ -460,6 +461,7 @@ function ChatPage({
     setMobileActionsChatId(null)
     setEditingChatId(null)
     setDraftTitle('')
+    setPendingDeleteChatId(null)
   }
 
   return (
@@ -647,7 +649,7 @@ function ChatPage({
                         onClick={e => {
                           e.stopPropagation()
                           e.preventDefault()
-                          handleDelete(c.id)
+                          setPendingDeleteChatId(c.id)
                         }}
                         style={{
                           border: 'none',
@@ -700,6 +702,82 @@ function ChatPage({
             background: 'rgba(0,0,0,0.15)',
           }}
         />
+      )}
+
+      {pendingDeleteChatId && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 500,
+          background: 'rgba(10,10,10,0.35)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1rem',
+        }} onClick={() => setPendingDeleteChatId(null)}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: 'min(420px, calc(100vw - 2rem))',
+              background: '#fffdf5',
+              border: '1px solid rgba(0,0,0,0.08)',
+              borderRadius: 16,
+              boxShadow: '0 18px 50px rgba(0,0,0,0.18)',
+              padding: '1.25rem 1.25rem 1rem',
+            }}
+          >
+            <h3 style={{
+              margin: '0 0 0.75rem',
+              fontSize: '1.05rem',
+              fontWeight: 700,
+              color: '#0a0a0a',
+              fontFamily: 'Oxanium, sans-serif',
+            }}>
+              Delete chat?
+            </h3>
+            <p style={{
+              margin: '0 0 1.1rem',
+              color: '#444',
+              fontSize: '0.95rem',
+              lineHeight: 1.5,
+            }}>
+              This action cannot be undone.
+            </p>
+            <div style={{
+              display: 'flex', justifyContent: 'flex-end', gap: '0.75rem',
+            }}>
+              <button
+                type="button"
+                onClick={() => setPendingDeleteChatId(null)}
+                style={{
+                  background: '#fff',
+                  border: '1px solid rgba(0,0,0,0.14)',
+                  borderRadius: 10,
+                  color: '#111827',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  padding: '0.72rem 1.15rem',
+                  fontFamily: 'Inter, sans-serif',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="tutorai-primary-button"
+                onClick={() => handleDelete(pendingDeleteChatId)}
+                style={{
+                  borderRadius: 10,
+                  padding: '0.72rem 1.15rem',
+                  fontSize: '0.9rem',
+                  fontFamily: 'Inter, sans-serif',
+                  fontWeight: 600,
+                  boxShadow: 'none',
+                  minWidth: 88,
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div style={{
