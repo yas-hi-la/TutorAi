@@ -601,6 +601,7 @@ function ChatPage({
                     >
                       <button
                         type="button"
+                        className="chat-action-button"
                         aria-label="Rename chat"
                         onClick={e => {
                           e.stopPropagation()
@@ -609,18 +610,20 @@ function ChatPage({
                           setMobileActionsChatId(null)
                         }}
                         style={{
-                          border: '1px solid rgba(0,0,0,0.12)',
-                          background: '#fff',
+                          border: 'none',
+                          background: 'transparent',
                           color: '#0a0a0a',
-                          borderRadius: 6,
-                          padding: '0.25rem 0.5rem',
+                          borderRadius: 0,
+                          padding: 0,
                           fontSize: '0.7rem',
                           cursor: 'pointer',
-                          minWidth: 42,
-                          minHeight: 28,
+                          width: 16,
+                          height: 16,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
+                          boxShadow: 'none',
+                          outline: 'none',
                         }}
                       >
                         <svg
@@ -639,6 +642,7 @@ function ChatPage({
                       </button>
                       <button
                         type="button"
+                        className="chat-action-button"
                         aria-label="Delete chat"
                         onClick={e => {
                           e.stopPropagation()
@@ -646,18 +650,20 @@ function ChatPage({
                           handleDelete(c.id)
                         }}
                         style={{
-                          border: '1px solid rgba(0,0,0,0.12)',
-                          background: '#fff',
+                          border: 'none',
+                          background: 'transparent',
                           color: '#0a0a0a',
-                          borderRadius: 6,
-                          padding: '0.25rem 0.5rem',
+                          borderRadius: 0,
+                          padding: 0,
                           fontSize: '0.7rem',
                           cursor: 'pointer',
-                          minWidth: 46,
-                          minHeight: 28,
+                          width: 16,
+                          height: 16,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
+                          boxShadow: 'none',
+                          outline: 'none',
                         }}
                       >
                         <svg
