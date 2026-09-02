@@ -7,6 +7,31 @@ dotenv.config();
 
 const app = express();
 const PORT = 5050;
+const MAX_GEMINI_RETRIES = 2;
+const GEMINI_RETRY_DELAY_MS = 1000;
+const TEMPORARY_ERROR_MESSAGE =
+  "TutorAI is temporarily unable to reach the AI service. Please try again in a moment.";
+
+const delay = (milliseconds) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const isTemporaryUnavailableError = (error) => {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const candidate = error;
+  const status = candidate.status ?? candidate.code;
+  const message =
+    typeof candidate.message === "string" ? candidate.message : "";
+
+  return (
+    status === 503 ||
+    status === "503" ||
+    candidate.code === "UNAVAILABLE" ||
+    /503\s+UNAVAILABLE|service unavailable/i.test(message)
+  );
+};
 
 app.use(cors());
 app.use(express.json());
@@ -113,13 +138,26 @@ Style constraints:
       { role: "user", parts: [{ text: question }] },
     ];
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents,
-      config: {
-        systemInstruction,
-      },
-    });
+    let response;
+    for (let attempt = 0; attempt <= MAX_GEMINI_RETRIES; attempt += 1) {
+      try {
+        response = await ai.models.generateContent({
+          model: "gemini-3.6-flash",
+          contents,
+          config: {
+            systemInstruction,
+          },
+        });
+        break;
+      } catch (error) {
+        const canRetry =
+          isTemporaryUnavailableError(error) && attempt < MAX_GEMINI_RETRIES;
+        if (!canRetry) {
+          throw error;
+        }
+        await delay(GEMINI_RETRY_DELAY_MS);
+      }
+    }
 
     res.json({
       answer: response.text
@@ -129,7 +167,9 @@ Style constraints:
     console.error("Gemini Error:", error);
 
     res.status(500).json({
-      error: "Failed to get a response from Gemini."
+      error: isTemporaryUnavailableError(error)
+        ? TEMPORARY_ERROR_MESSAGE
+        : "Failed to get a response from Gemini."
     });
   }
 });

@@ -19,7 +19,7 @@ type Chat = {
 }
 
 const STORAGE_KEY = 'study_ai_chats'
-const ERROR_MESSAGE = 'Sorry, I could not get a response right now. Please try again.'
+const ERROR_MESSAGE = 'TutorAI is temporarily unable to reach the AI service. Please try again in a moment.'
 
 function isChat(value: unknown): value is Chat {
   if (!value || typeof value !== 'object') return false
