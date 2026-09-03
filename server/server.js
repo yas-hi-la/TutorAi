@@ -2,8 +2,10 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const { GoogleGenAI } = require("@google/genai");
+const path = require("path");
+const { MongoClient, ObjectId } = require("mongodb");
 
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, ".env") });
 
 const app = express();
 const PORT = 5050;
@@ -11,6 +13,45 @@ const MAX_GEMINI_RETRIES = 2;
 const GEMINI_RETRY_DELAY_MS = 1000;
 const TEMPORARY_ERROR_MESSAGE =
   "TutorAI is temporarily unable to reach the AI service. Please try again in a moment.";
+const MONGODB_UNAVAILABLE_MESSAGE =
+  "TutorAI is temporarily unable to reach the database. Please try again in a moment.";
+
+const mongoClient = process.env.MONGODB_URI
+  ? new MongoClient(process.env.MONGODB_URI)
+  : null;
+let mongoDatabasePromise;
+
+const getConversationsCollection = async () => {
+  if (!mongoClient) {
+    throw new Error("MONGODB_URI is not configured.");
+  }
+
+  if (!mongoDatabasePromise) {
+    mongoDatabasePromise = mongoClient
+      .connect()
+      .then((client) =>
+        client.db(process.env.MONGODB_DB_NAME || "tutorai").collection("conversations")
+      )
+      .catch((error) => {
+        mongoDatabasePromise = undefined;
+        throw error;
+      });
+  }
+
+  return mongoDatabasePromise;
+};
+
+const isValidObjectId = (id) => typeof id === "string" && ObjectId.isValid(id);
+
+const toConversationResponse = ({ _id, ...conversation }) => ({
+  ...conversation,
+  id: _id.toString(),
+});
+
+const handleMongoError = (res, error) => {
+  console.error("MongoDB Error:", error);
+  return res.status(503).json({ error: MONGODB_UNAVAILABLE_MESSAGE });
+};
 
 const delay = (milliseconds) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -171,6 +212,127 @@ Style constraints:
         ? TEMPORARY_ERROR_MESSAGE
         : "Failed to get a response from Gemini."
     });
+  }
+});
+
+app.post("/api/conversations", async (req, res) => {
+  try {
+    const { title, messages } = req.body;
+    if (typeof title !== "string" || !Array.isArray(messages)) {
+      return res.status(400).json({
+        error: "Please provide a title and messages array.",
+      });
+    }
+
+    const now = new Date();
+    const conversation = {
+      title,
+      messages,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const collection = await getConversationsCollection();
+    const result = await collection.insertOne(conversation);
+
+    return res.status(201).json(
+      toConversationResponse({
+        ...conversation,
+        _id: result.insertedId,
+      }),
+    );
+  } catch (error) {
+    return handleMongoError(res, error);
+  }
+});
+
+app.get("/api/conversations", async (req, res) => {
+  try {
+    const collection = await getConversationsCollection();
+    const conversations = await collection
+      .find({})
+      .sort({ updatedAt: -1 })
+      .toArray();
+    return res.json(conversations.map(toConversationResponse));
+  } catch (error) {
+    return handleMongoError(res, error);
+  }
+});
+
+app.get("/api/conversations/:id", async (req, res) => {
+  if (!isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: "Invalid conversation ID." });
+  }
+
+  try {
+    const collection = await getConversationsCollection();
+    const conversation = await collection.findOne({
+      _id: new ObjectId(req.params.id),
+    });
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found." });
+    }
+    return res.json(toConversationResponse(conversation));
+  } catch (error) {
+    return handleMongoError(res, error);
+  }
+});
+
+app.patch("/api/conversations/:id", async (req, res) => {
+  if (!isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: "Invalid conversation ID." });
+  }
+
+  const { title, messages } = req.body;
+  if (
+    (title !== undefined && typeof title !== "string") ||
+    (messages !== undefined && !Array.isArray(messages)) ||
+    (title === undefined && messages === undefined)
+  ) {
+    return res.status(400).json({
+      error: "Provide a title and/or messages array.",
+    });
+  }
+
+  try {
+    const collection = await getConversationsCollection();
+    const update = { $set: { updatedAt: new Date() } };
+    if (title !== undefined) {
+      update.$set.title = title;
+    }
+    if (messages !== undefined) {
+      update.$push = { messages: { $each: messages } };
+    }
+
+    const result = await collection.findOneAndUpdate(
+      { _id: new ObjectId(req.params.id) },
+      update,
+      { returnDocument: "after" },
+    );
+    if (!result) {
+      return res.status(404).json({ error: "Conversation not found." });
+    }
+    return res.json(toConversationResponse(result));
+  } catch (error) {
+    return handleMongoError(res, error);
+  }
+});
+
+app.delete("/api/conversations/:id", async (req, res) => {
+  if (!isValidObjectId(req.params.id)) {
+    return res.status(400).json({ error: "Invalid conversation ID." });
+  }
+
+  try {
+    const collection = await getConversationsCollection();
+    const result = await collection.deleteOne({
+      _id: new ObjectId(req.params.id),
+    });
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Conversation not found." });
+    }
+    return res.status(204).send();
+  } catch (error) {
+    return handleMongoError(res, error);
   }
 });
 

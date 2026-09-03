@@ -14,11 +14,11 @@ type Chat = {
   id: string
   title: string
   messages: Message[]
-  createdAt: number
-  updatedAt: number
+  createdAt: string
+  updatedAt: string
 }
 
-const STORAGE_KEY = 'study_ai_chats'
+const API_BASE_URL = 'http://localhost:5050'
 const ERROR_MESSAGE = 'TutorAI is temporarily unable to reach the AI service. Please try again in a moment.'
 
 function isChat(value: unknown): value is Chat {
@@ -37,17 +37,6 @@ function isChat(value: unknown): value is Chat {
     )
 }
 
-function loadChats(): Chat[] {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved) return []
-    const parsed: unknown = JSON.parse(saved)
-    return Array.isArray(parsed) && parsed.every(isChat) ? parsed : []
-  } catch (error) {
-    console.error('Could not load saved chats:', error)
-    return []
-  }
-}
 
 function createChatId() {
   return typeof crypto.randomUUID === 'function'
@@ -76,16 +65,16 @@ interface LetterDef {
 }
 
 const LETTERS: LetterDef[] = [
-  { char: 't', from: 'top',    delay: 0 },
+  { char: 't', from: 'top', delay: 0 },
   { char: 'u', from: 'bottom', delay: 320 },
-  { char: 't', from: 'top',    delay: 640 },
-  { char: 'o', from: 'top',    delay: 960 },
-  { char: 'r', from: 'top',    delay: 1280 },
-  { char: 'A', from: 'left',   delay: 1700 },
-  { char: 'ı', from: 'left',   delay: 1950 },
+  { char: 't', from: 'top', delay: 640 },
+  { char: 'o', from: 'top', delay: 960 },
+  { char: 'r', from: 'top', delay: 1280 },
+  { char: 'A', from: 'left', delay: 1700 },
+  { char: 'ı', from: 'left', delay: 1950 },
 ]
 
-const DOT_R     = 13
+const DOT_R = 13
 const DOT_SCALE = 320
 const BASE_DELAY = 700
 
@@ -119,9 +108,9 @@ function AnimationPage({
             {LETTERS.map((l, i) => {
               const isAi = i >= 5
               let initial: string
-              if (l.from === 'top')         initial = 'translateY(-115vh)'
+              if (l.from === 'top') initial = 'translateY(-115vh)'
               else if (l.from === 'bottom') initial = 'translateY(115vh)'
-              else                          initial = 'translateX(-115vw)'
+              else initial = 'translateX(-115vw)'
               return (
                 <span key={i} ref={i === 6 ? iRef : undefined} style={{
                   display: 'inline-block',
@@ -193,7 +182,7 @@ function InputBar({
         gap: '0.5rem',
       }}
         onFocusCapture={e => (e.currentTarget.style.borderColor = 'rgba(229,215,11,0.8)')}
-        onBlurCapture={e  => (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)')}
+        onBlurCapture={e => (e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)')}
       >
         {/* Paperclip */}
         <label style={{
@@ -236,31 +225,31 @@ function InputBar({
             e.target.style.height = e.target.scrollHeight + 'px'
           }}
           onKeyDown={e => {
-  if (e.key === 'Enter') {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault()
+            if (e.key === 'Enter') {
+              if (e.ctrlKey || e.metaKey) {
+                e.preventDefault()
 
-      const textarea = e.currentTarget
-      const start = textarea.selectionStart
-      const end = textarea.selectionEnd
+                const textarea = e.currentTarget
+                const start = textarea.selectionStart
+                const end = textarea.selectionEnd
 
-      const newValue =
-        value.substring(0, start) + '\n' + value.substring(end)
+                const newValue =
+                  value.substring(0, start) + '\n' + value.substring(end)
 
-      onChange(newValue)
+                onChange(newValue)
 
-      requestAnimationFrame(() => {
-        textarea.selectionStart = start + 1
-        textarea.selectionEnd = start + 1
-      })
+                requestAnimationFrame(() => {
+                  textarea.selectionStart = start + 1
+                  textarea.selectionEnd = start + 1
+                })
 
-      return
-    }
+                return
+              }
 
-    e.preventDefault()
-    onSubmit()
-  }
-}}
+              e.preventDefault()
+              onSubmit()
+            }
+          }}
           style={{
             flex: 1, border: 'none', outline: 'none',
             background: 'transparent',
@@ -439,7 +428,9 @@ function ChatPage({
     if (q && !loading) { onFollowUp(q); setFollowUp('') }
   }
 
-  const recentChats = [...chats].sort((a, b) => b.updatedAt - a.updatedAt)
+  const recentChats = [...chats].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  )
 
   const handleRenameSave = (id: string) => {
     const trimmed = draftTitle.trim()
@@ -810,7 +801,7 @@ function ChatPage({
               }}
               aria-label="Open menu"
             >
-              {[0,1,2].map(i => (
+              {[0, 1, 2].map(i => (
                 <span key={i} style={{
                   display: 'block', width: 20, height: 2,
                   background: '#333', borderRadius: 2,
@@ -1029,31 +1020,45 @@ function ChatPage({
 // ============================================================
 
 export default function App() {
-  const [visible, setVisible]           = useState<boolean[]>(LETTERS.map(() => false))
-  const [dotPos, setDotPos]             = useState<{ x: number; y: number } | null>(null)
-  const [chats, setChats] = useState<Chat[]>(loadChats)
+  const [visible, setVisible] = useState<boolean[]>(LETTERS.map(() => false))
+  const [dotPos, setDotPos] = useState<{ x: number; y: number } | null>(null)
+  const [chats, setChats] = useState<Chat[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [dotFalling, setDotFalling]     = useState(false)
-  const [dotExpanded, setDotExpanded]   = useState(false)
-  const [showYellow, setShowYellow]     = useState(false)
+  const [dotFalling, setDotFalling] = useState(false)
+  const [dotExpanded, setDotExpanded] = useState(false)
+  const [showYellow, setShowYellow] = useState(false)
   const [contractClip, setContractClip] = useState(false)
-  const [showPage, setShowPage         ] = useState(false)
-  const [logoAt, setLogoAt]             = useState('64px 30px')
-  const [currentPage, setCurrentPage]   = useState<'landing' | 'chat'>('landing')
+  const [showPage, setShowPage] = useState(false)
+  const [logoAt, setLogoAt] = useState('64px 30px')
+  const [currentPage, setCurrentPage] = useState<'landing' | 'chat'>('landing')
 
   const [tx, setTx] = useState<{ active: boolean; clip: string; transition: string }>({ active: false, clip: '', transition: 'none' })
 
-  const iRef    = useRef<HTMLSpanElement>(null)
+  const iRef = useRef<HTMLSpanElement>(null)
   const logoRef = useRef<HTMLSpanElement>(null)
 
+
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(chats))
-    } catch (error) {
-      console.error('Could not save chats:', error)
+    const loadChatsFromDatabase = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/conversations`)
+        if (!response.ok) {
+          throw new Error('Failed to load conversations')
+        }
+
+        const data: unknown = await response.json()
+
+        if (Array.isArray(data)) {
+          setChats(data as Chat[])
+        }
+      } catch (error) {
+        console.error('Could not load chats from MongoDB:', error)
+      }
     }
-  }, [chats])
+
+    loadChatsFromDatabase()
+  }, [])
 
   useEffect(() => {
     const T: ReturnType<typeof setTimeout>[] = []
@@ -1064,9 +1069,9 @@ export default function App() {
       }, BASE_DELAY + l.delay))
     })
 
-    const dotDropAt   = BASE_DELAY + 1950 + 900
+    const dotDropAt = BASE_DELAY + 1950 + 900
     const dotExpandAt = dotDropAt + 800
-    const expandDone  = dotExpandAt + 1400
+    const expandDone = dotExpandAt + 1400
 
     T.push(setTimeout(() => {
       if (iRef.current) {
@@ -1092,7 +1097,7 @@ export default function App() {
     return () => T.forEach(clearTimeout)
   }, [])
 
-  const clipExpanded   = 'circle(200vmax at 50% 50%)'
+  const clipExpanded = 'circle(200vmax at 50% 50%)'
   const clipContracted = `circle(0px at ${logoAt})`
 
   const askGemini = async (q: string, chatId: string, history: Message[] = []) => {
@@ -1118,13 +1123,23 @@ export default function App() {
         : ''
       if (!answer) throw new Error('Response did not include an answer')
       setChats(prev => prev.map(chat => chat.id === chatId
-        ? { ...chat, messages: [...chat.messages, { role: 'assistant', content: answer }], updatedAt: Date.now() }
+        ? { ...chat, messages: [...chat.messages, { role: 'assistant', content: answer }], updatedAt: new Date().toISOString() }
         : chat
       ))
+
+      await fetch(`${API_BASE_URL}/api/conversations/${chatId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'assistant', content: answer }],
+        }),
+      })
     } catch (error) {
       console.error('tutorAi Error:', error)
       setChats(prev => prev.map(chat => chat.id === chatId
-        ? { ...chat, messages: [...chat.messages, { role: 'assistant', content: ERROR_MESSAGE }], updatedAt: Date.now() }
+        ? { ...chat, messages: [...chat.messages, { role: 'assistant', content: ERROR_MESSAGE }], updatedAt: new Date().toISOString() }
         : chat
       ))
     } finally {
@@ -1140,105 +1155,182 @@ export default function App() {
     const existingChat = chats.find(chat => chat.id === chatId)
     const history = existingChat ? existingChat.messages : []
 
-    setChats(prev => prev.map(chat => chat.id === chatId
-      ? { ...chat, messages: [...chat.messages, { role: 'user', content: q }], updatedAt: Date.now() }
-      : chat
-    ))
-    await askGemini(q, chatId, history)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/conversations/${chatId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: q }],
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to save follow-up message')
+      }
+
+      setChats(prev => prev.map(chat => chat.id === chatId
+        ? {
+          ...chat,
+          messages: [...chat.messages, { role: 'user', content: q }],
+          updatedAt: new Date().toISOString(),
+        }
+        : chat
+      ))
+
+      await askGemini(q, chatId, history)
+    } catch (error) {
+      console.error('Could not save follow-up message:', error)
+    }
   }
+
 
   const handleAsk = async (question: string) => {
     const q = question.trim()
-    if (!q) return
-    const now = Date.now()
-    const chatId = createChatId()
-    setChats(prev => [...prev, {
-      id: chatId,
-      title: createChatTitle(q),
-      messages: [{ role: 'user', content: q }],
-      createdAt: now,
-      updatedAt: now,
-    }])
-    setCurrentChatId(chatId)
-    await askGemini(q, chatId)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/conversations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: createChatTitle(q),
+          messages: [{ role: 'user', content: q }],
+        }),
+      })
 
-  // ⬇️ KEEP YOUR EXISTING ANIMATION CODE BELOW THIS
+      const data: unknown = await response.json()
 
-  const btn = document.querySelector<HTMLElement>('[data-send-btn]')
-  const sendOrigin = btn
-    ? (() => {
+      if (!response.ok) {
+        throw new Error(
+          data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+            ? data.error
+            : 'Failed to create conversation'
+        )
+      }
+
+      const newChat = data as Chat
+
+      setChats(prev => [...prev, newChat])
+      setCurrentChatId(newChat.id)
+      await askGemini(q, newChat.id, newChat.messages)
+    } catch (error) {
+      console.error('Could not create chat:', error)
+      return
+    }
+
+    // ⬇️ KEEP YOUR EXISTING ANIMATION CODE BELOW THIS
+
+    const btn = document.querySelector<HTMLElement>('[data-send-btn]')
+    const sendOrigin = btn
+      ? (() => {
         const r = btn.getBoundingClientRect()
         return `${Math.round(r.left + r.width / 2)}px ${Math.round(r.top + r.height / 2)}px`
       })()
-    : '50% 62%'
+      : '50% 62%'
 
-  const questionOrigin = `${Math.round(window.innerWidth * 0.78)}px ${Math.round(window.innerHeight * 0.16)}px`
+    const questionOrigin = `${Math.round(window.innerWidth * 0.78)}px ${Math.round(window.innerHeight * 0.16)}px`
 
-  setTx({
-    active: true,
-    clip: `circle(0px at ${sendOrigin})`,
-    transition: 'none',
-  })
-
-  setTimeout(() =>
     setTx({
       active: true,
-      clip: `circle(200vmax at ${sendOrigin})`,
-      transition: 'clip-path 0.55s cubic-bezier(0.4,0,0.2,1)',
-    }),
-    30
-  )
-
-  setTimeout(() => {
-    setCurrentPage('chat')
-    setTx({
-      active: true,
-      clip: `circle(200vmax at ${questionOrigin})`,
+      clip: `circle(0px at ${sendOrigin})`,
       transition: 'none',
     })
-  }, 640)
 
-  setTimeout(() =>
-    setTx({
-      active: true,
-      clip: `circle(0px at ${questionOrigin})`,
-      transition: 'clip-path 0.65s cubic-bezier(0.4,0,0.2,1)',
-    }),
-    680
-  )
+    setTimeout(() =>
+      setTx({
+        active: true,
+        clip: `circle(200vmax at ${sendOrigin})`,
+        transition: 'clip-path 0.55s cubic-bezier(0.4,0,0.2,1)',
+      }),
+      30
+    )
 
-  setTimeout(
-    () => setTx({ active: false, clip: '', transition: 'none' }),
-    1400
-  )
-}
+    setTimeout(() => {
+      setCurrentPage('chat')
+      setTx({
+        active: true,
+        clip: `circle(200vmax at ${questionOrigin})`,
+        transition: 'none',
+      })
+    }, 640)
 
-  const handleRenameChat = (id: string, title: string) => {
+    setTimeout(() =>
+      setTx({
+        active: true,
+        clip: `circle(0px at ${questionOrigin})`,
+        transition: 'clip-path 0.65s cubic-bezier(0.4,0,0.2,1)',
+      }),
+      680
+    )
+
+    setTimeout(
+      () => setTx({ active: false, clip: '', transition: 'none' }),
+      1400
+    )
+  }
+
+
+  const handleRenameChat = async (id: string, title: string) => {
     const trimmedTitle = title.trim()
     if (!trimmedTitle) return
 
-    setChats(prev => prev.map(chat => chat.id === id
-      ? { ...chat, title: trimmedTitle, updatedAt: Date.now() }
-      : chat
-    ))
-  }
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/conversations/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: trimmedTitle,
+        }),
+      })
 
-  const handleDeleteChat = (id: string) => {
-    const remainingChats = chats.filter(chat => chat.id !== id)
-
-    if (currentChatId === id) {
-      const nextRecentChat = [...remainingChats].sort((a, b) => b.updatedAt - a.updatedAt)[0]
-
-      if (nextRecentChat) {
-        setCurrentChatId(nextRecentChat.id)
-      } else {
-        setCurrentChatId(null)
-        setCurrentPage('landing')
+      if (!response.ok) {
+        throw new Error('Failed to rename conversation')
       }
-    }
 
-    setChats(remainingChats)
+      setChats(prev => prev.map(chat => chat.id === id
+        ? { ...chat, title: trimmedTitle, updatedAt: new Date().toISOString() }
+        : chat
+      ))
+    } catch (error) {
+      console.error('Could not rename chat:', error)
+    }
   }
+
+  const handleDeleteChat = async (id: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/conversations/${id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete conversation')
+      }
+
+      const remainingChats = chats.filter(chat => chat.id !== id)
+
+      if (currentChatId === id) {
+        const nextRecentChat = [...remainingChats].sort(
+          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        )[0]
+
+        if (nextRecentChat) {
+          setCurrentChatId(nextRecentChat.id)
+        } else {
+          setCurrentChatId(null)
+          setCurrentPage('landing')
+        }
+      }
+
+      setChats(remainingChats)
+    } catch (error) {
+      console.error('Could not delete chat:', error)
+    }
+  }
+
 
   const currentChat = chats.find(chat => chat.id === currentChatId)
 
