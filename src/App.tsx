@@ -18,7 +18,7 @@ type Chat = {
   updatedAt: string
 }
 
-const API_BASE_URL = 'http://localhost:5050'
+const API_BASE_URL = 'https://tutorai-backend-y36r.onrender.com'
 const ERROR_MESSAGE = 'TutorAI is temporarily unable to reach the AI service. Please try again in a moment.'
 
 function isChat(value: unknown): value is Chat {
@@ -1103,7 +1103,7 @@ export default function App() {
   const askGemini = async (q: string, chatId: string, history: Message[] = []) => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5050/api/ask', {
+      const response = await fetch('https://tutorai-backend-y36r.onrender.com/api/ask', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
