@@ -8,7 +8,7 @@ const { MongoClient, ObjectId } = require("mongodb");
 dotenv.config({ path: path.join(__dirname, ".env") });
 
 const app = express();
-const PORT = 5050;
+const PORT = process.env.PORT || 5050;
 const MAX_GEMINI_RETRIES = 2;
 const GEMINI_RETRY_DELAY_MS = 1000;
 const TEMPORARY_ERROR_MESSAGE =
@@ -337,5 +337,5 @@ app.delete("/api/conversations/:id", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`tutorAi server running on http://localhost:${PORT}`);
+  console.log(`tutorAi server running on port ${PORT}`);
 });
